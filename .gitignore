@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Flask
+instance/
+*.sqlite
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data — keep players.json tracked, ignore any local overrides
+data/*.bak
