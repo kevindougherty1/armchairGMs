@@ -130,7 +130,11 @@ async function doForgotPassword(){
   if(!em) return aerr('Enter your email address first.');
   setAuthLoading(true);
   try{
-    const r=await sbFetch('/auth/v1/recover',{method:'POST',body:JSON.stringify({email:em})});
+    const r=await sbFetch('/auth/v1/recover',{method:'POST',body:JSON.stringify({email:em,redirectTo:'https://armchairgms.onrender.com'})});
+    if(!r.ok){
+      const msg=r.data?.msg||r.data?.message||r.data?.error_description||'Something went wrong. Try again.';
+      return aerr(msg);
+    }
     aok('If that email has an account, a reset link is on its way. Check your inbox.');
   }catch(e){aerr('Network error. Check your connection.');}
   finally{setAuthLoading(false);}
