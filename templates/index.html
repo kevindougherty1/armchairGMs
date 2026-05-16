@@ -664,6 +664,22 @@
   </div>
 </div>
 </div>
+
+<!-- PASSWORD RESET OVERLAY -->
+<div id="reset-overlay" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:1000;place-items:center;">
+  <div class="auth-box">
+    <div class="a-hed">Set New Password</div>
+    <div class="a-sub">Enter your new password below</div>
+    <div id="reset-err" class="a-err" style="display:none;"></div>
+    <div id="reset-ok" style="display:none;background:rgba(58,122,74,0.15);border:1px solid var(--green);padding:10px 12px;font-size:12px;color:var(--gt);margin-bottom:14px;font-family:'Oswald',sans-serif;"></div>
+    <label class="fl">New Password</label>
+    <input class="fi" type="password" id="reset-pw" placeholder="Minimum 6 characters">
+    <label class="fl">Confirm Password</label>
+    <input class="fi" type="password" id="reset-pw2" placeholder="Confirm password" onkeydown="if(event.key==='Enter')doResetPassword()">
+    <button id="reset-btn" class="abtn abtn-p" onclick="doResetPassword()">Set Password →</button>
+  </div>
+</div>
+
 <script>var RAW={{ players | tojson }};</script>
 <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
 <script src="{{ url_for('static', filename='js/core.js') }}"></script>

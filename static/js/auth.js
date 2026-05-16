@@ -180,5 +180,46 @@ function launch(u){
     }
   });
 }
-window.addEventListener('DOMContentLoaded',()=>{const s=lSess();if(s)launch(s);});
+window.addEventListener('DOMContentLoaded',()=>{
+  const params=new URLSearchParams(window.location.hash.slice(1));
+  if(params.get('type')==='recovery'){
+    const token=params.get('access_token');
+    if(token){
+      window.__resetToken=token;
+      const o=document.getElementById('reset-overlay');
+      o.style.display='grid';
+      o.style.setProperty('display','grid');
+      return;
+    }
+  }
+  const s=lSess();if(s)launch(s);
+});
+
+async function doResetPassword(){
+  const pw=document.getElementById('reset-pw').value;
+  const pw2=document.getElementById('reset-pw2').value;
+  const rerr=(msg)=>{const e=document.getElementById('reset-err');e.textContent=msg;e.style.display='block';document.getElementById('reset-ok').style.display='none';};
+  const rok=(msg)=>{const e=document.getElementById('reset-ok');e.textContent=msg;e.style.display='block';document.getElementById('reset-err').style.display='none';};
+  if(!pw) return rerr('Enter a new password.');
+  if(pw.length<6) return rerr('Password must be at least 6 characters.');
+  if(pw!==pw2) return rerr('Passwords do not match.');
+  const token=window.__resetToken;
+  if(!token) return rerr('Invalid reset link. Please request a new one.');
+  const btn=document.getElementById('reset-btn');
+  btn.disabled=true;btn.style.opacity='0.6';
+  try{
+    const r=await sbFetch('/auth/v1/user',{method:'PUT',headers:{'Authorization':`Bearer ${token}`},body:JSON.stringify({password:pw})});
+    if(r.ok){
+      rok('Password updated! Redirecting to sign in...');
+      setTimeout(()=>{
+        document.getElementById('reset-overlay').style.display='none';
+        document.getElementById('landing').style.display='grid';
+        history.replaceState(null,'',window.location.pathname);
+      },1500);
+    }else{
+      rerr(r.data?.message||'Failed to update password. Try requesting a new link.');
+    }
+  }catch(e){rerr('Network error. Check your connection.');}
+  finally{btn.disabled=false;btn.style.opacity='1';}
+}
 
