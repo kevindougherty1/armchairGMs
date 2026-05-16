@@ -18,7 +18,8 @@ async function sbFetch(path, opts={}){
     ...opts,
     headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,...(opts.headers||{})}
   });
-  const data=await res.json();
+  let data={};
+  try{data=await res.json();}catch(e){}
   return{ok:res.ok,status:res.status,data};
 }
 
