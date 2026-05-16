@@ -10,8 +10,8 @@ const DATA=RAW.map(d=>({rank:d.r,name:d.n,pos:d.p,team:d.t,age:d.a,score:d.s,har
 let CU=null;
 
 // ── SUPABASE AUTH ─────────────────────────────────────────────────────────
-const SB_URL='https://uabtlmzytbzwagnyprcx.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhYnRsbXp5dGJ6d2FnbnlwcmN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0NzQ4NTMsImV4cCI6MjA5NDA1MDg1M30.Adg5xOF7zryNx3nDH5OgsJh0sxsrWZGdizwTdtLyBmk';
+const SB_URL='https://gmxxwhghtngjmdcqkvov.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdteHh3aGdodG5qZ21kY3Frdm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4Njk2NzQsImV4cCI6MjA5NDQ0NTY3NH0.K6RmSIcWZkgccwuRAKbaCGrbFpHxmiv1g7JLH47Ur0I';
 
 async function sbFetch(path, opts={}){
   const res=await fetch(`${SB_URL}${path}`,{
