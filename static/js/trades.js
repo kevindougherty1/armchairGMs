@@ -211,22 +211,17 @@
 
     const timelineRows=ptrades.map((t,ti)=>{
       const[s1,s2]=t.sides;if(!s1||!s2)return'';
-      // Sender = the side that contains this player (trading them away)
+      // Sleeper's `adds` maps player → the team that RECEIVED them,
+      // so side.players = what that team received.
+      // If the player is in s1's list, s1 received them (s2 sent them).
       const playerInS1=s1.players.some(pl=>pl.name===p.name);
-      const sender  = playerInS1 ? s1 : s2;
-      const receiver= playerInS1 ? s2 : s1;
+      const sender  = playerInS1 ? s2 : s1;
+      const receiver= playerInS1 ? s1 : s2;
       const ds=t.ts?new Date(t.ts).toLocaleDateString('en-US',{month:'short',year:'numeric'}):'';
-      // What receiver gave back (excluding the player being tracked)
-      const returnItems=[
-        ...receiver.players.filter(pl=>pl.name!==p.name).slice(0,3).map(pl=>pl.name.split(' ').pop()),
-        ...receiver.picks.slice(0,2)
-      ].filter(Boolean);
-      const returnStr=returnItems.length?returnItems.join(', '):'—';
-      return '<div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:start;gap:6px;padding:8px 12px;'+(ti>0?'border-top:1px solid var(--border);':'')+'background:'+(ti%2===0?'var(--bg3)':'var(--panel)')+';">'
+      return '<div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;gap:6px;padding:8px 12px;'+(ti>0?'border-top:1px solid var(--border);':'')+'background:'+(ti%2===0?'var(--bg3)':'var(--panel)')+';">'
         // SENDER left
         +'<div style="text-align:right;">'
         +'<div style="font-family:Oswald,sans-serif;font-size:12px;font-weight:600;color:var(--rt);">'+sender.name.split(' ')[0]+'</div>'
-        +'<div style="font-size:10px;color:var(--text3);font-family:Oswald,sans-serif;margin-top:1px;">trades away</div>'
         +'</div>'
         // CENTER arrow + date
         +'<div style="text-align:center;">'
@@ -236,7 +231,6 @@
         // RECEIVER right
         +'<div style="text-align:left;">'
         +'<div style="font-family:Oswald,sans-serif;font-size:12px;font-weight:600;color:var(--gt);">'+receiver.name.split(' ')[0]+'</div>'
-        +'<div style="font-size:10px;color:var(--text3);font-family:Oswald,sans-serif;margin-top:1px;">returns: '+returnStr+'</div>'
         +'</div>'
         +'</div>';
     }).join('');

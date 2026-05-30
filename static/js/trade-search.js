@@ -63,204 +63,41 @@ async function loadLeague(){
     loadStep(4);
 
     // ─── PICK ALLOCATION ──────────────────────────────────────────────────────
-    // Step 1: Seed every team with their own picks for next 3 draft years
-    // Each team gets exactly 1 pick per round (1-4) per year (2027-2029) = 12 picks
+    // Sleeper exposes the authoritative current state of every traded pick at
+    // /v1/league/{id}/traded_picks. Each entry has:
+    //   roster_id          = the ORIGINAL owner (whose draft slot it is)
+    //   owner_id           = the CURRENT owner
+    //   previous_owner_id  = the previous owner
+    // Seed each roster with its own picks for the next 3 draft years, then apply
+    // the traded-picks delta. This replaces the prior transaction-replay system,
+    // which had to translate historical roster IDs and missed commissioner reverts.
     const PICK_YEARS=[2027,2028,2029];
     const PICK_ROUNDS=[1,2,3,4];
     const rosterPicksRaw={};
     rosters.forEach(r=>{
       rosterPicksRaw[r.roster_id]=[];
       PICK_YEARS.forEach(yr=>PICK_ROUNDS.forEach(rd=>{
-        rosterPicksRaw[r.roster_id].push({season:yr,round:rd});
+        rosterPicksRaw[r.roster_id].push({season:yr,round:rd,_orig:r.roster_id});
       }));
     });
-
-    // Step 2: Build user_id → roster_id map + per-season roster_id translation
-    const userToRoster={};
-    rosters.forEach(r=>{ if(r.owner_id) userToRoster[String(r.owner_id)]=r.roster_id; });
-    const seasonRidMap={}; // leagueId → {oldRosterId: currentRosterId}
-
-    // Pre-fetch all historical rosters to build seasonRidMap
     try{
-      let scanId=id;
-      const seenL=new Set();
-      for(let s=0;s<10;s++){
-        if(seenL.has(scanId)) break; seenL.add(scanId);
-        const [lgRes,histRosters]=await Promise.all([
-          fetch(`https://api.sleeper.app/v1/league/${scanId}`).then(r=>r.ok?r.json():null).catch(()=>null),
-          fetch(`https://api.sleeper.app/v1/league/${scanId}/rosters`).then(r=>r.ok?r.json():[]).catch(()=>[])
-        ]);
-        const ridMap={};
-        histRosters.forEach(r=>{
-          if(!r.owner_id) return;
-          if(!userToRoster[String(r.owner_id)]){
-            const cur=rosters.find(cr=>cr.owner_id===r.owner_id);
-            if(cur) userToRoster[String(r.owner_id)]=cur.roster_id;
-          }
-          const curRid=userToRoster[String(r.owner_id)];
-          if(curRid) ridMap[r.roster_id]=curRid;
-        });
-        seasonRidMap[scanId]=ridMap;
-        if(!lgRes?.previous_league_id) break;
-        scanId=lgRes.previous_league_id;
-      }
-    }catch(e){}
-
-    function toRid(v, lid){
-      if(!v&&v!==0) return null;
-      const n=parseInt(v);
-      if(isNaN(n)||n<=0) return null;
-      // Translate historical roster_id → current via season map
-      if(lid&&seasonRidMap[lid]&&seasonRidMap[lid][n]!==undefined) return seasonRidMap[lid][n];
-      if(rosters.find(r=>r.roster_id===n)) return n;
-      return userToRoster[String(v)]||null;
-    }
-
-    // Step 3: Fetch ALL transactions across all historical seasons
-    // Sort chronologically by status_updated, then transaction_id as tiebreaker
-    const allTxns=[];
-    try{
-      let scanId=id;
-      const seenLeagues=new Set();
-      for(let s=0;s<10;s++){
-        if(seenLeagues.has(scanId)) break;
-        seenLeagues.add(scanId);
-        const [lgRes,weekTxns]=await Promise.all([
-          fetch(`https://api.sleeper.app/v1/league/${scanId}`).then(r=>r.ok?r.json():null).catch(()=>null),
-          Promise.all(Array.from({length:24},(_,i)=>
-            fetch(`https://api.sleeper.app/v1/league/${scanId}/transactions/${i}`)
-              .then(r=>r.json()).catch(()=>[])
-          ))
-        ]);
-        weekTxns.forEach(wk=>{
-          if(!Array.isArray(wk)) return;
-          wk.forEach(t=>{
-            if(t.type==='trade'||t.type==='commissioner'){t._lid=scanId; allTxns.push(t);}
-          });
-        });
-        if(!lgRes?.previous_league_id) break;
-        scanId=lgRes.previous_league_id;
-      }
-    }catch(e){}
-
-    // Deduplicate by transaction_id
-    const txnSeen=new Set();
-    const dedupedTxns=allTxns.filter(t=>{
-      const k=String(t.transaction_id||'_'+Math.random());
-      if(txnSeen.has(k)) return false;
-      txnSeen.add(k);
-      return true;
-    });
-
-    // Sort chronologically: oldest first
-    // Primary: status_updated timestamp. Secondary: transaction_id (snowflake = monotonic)
-    dedupedTxns.sort((a,b)=>{
-      const tsDiff=(a.status_updated||a.created||0)-(b.status_updated||b.created||0);
-      if(tsDiff!==0) return tsDiff;
-      const aId=String(a.transaction_id||'0').padStart(20,'0');
-      const bId=String(b.transaction_id||'0').padStart(20,'0');
-      return aId<bId?-1:aId>bId?1:0;
-    });
-
-    // Step 4: Walk every transaction in chronological order
-    // For each draft_pick: subtract 1 pick of (season, round) from prev owner
-    //                      add    1 pick of (season, round) to   new  owner
-    // YEAR AND ROUND ARE SACRED — never confused, always tracked separately
-    dedupedTxns.forEach(txn=>{
-      // Dedup within a single transaction (Sleeper sometimes lists same pick twice)
-      const seenInTxn=new Set();
-      (txn.draft_picks||[]).forEach(pk=>{
-        const yr=parseInt(pk.season)||0;
-        const rd=parseInt(pk.round)||0;
-
-        // Only process future picks (2027+), skip current/past season picks
-        if(yr<2027||!rd||rd<1||rd>4) return;
-
-        const lid=txn._lid;
-        const prevRid=toRid(pk.previous_owner_id,lid);
-        const nowRid=toRid(pk.owner_id,lid);
-
-        // Must have both sides and they must be different
-        if(!prevRid||!nowRid||prevRid===nowRid) return;
-
-        // Dedup: same year+round+prev+now within one transaction = skip duplicate
-        const key=`${yr}_${rd}_${prevRid}_${nowRid}`;
-        if(seenInTxn.has(key)) return;
-        seenInTxn.add(key);
-
-        // Remove one pick of this EXACT year+round from prev owner
-        const prevArr=rosterPicksRaw[prevRid];
-        if(!prevArr) return;
-        const removeIdx=prevArr.findIndex(p=>p.season===yr&&p.round===rd);
-        if(removeIdx<0) return;
-        prevArr.splice(removeIdx,1);
-
-        // Add one pick of this EXACT year+round to new owner
-        if(!rosterPicksRaw[nowRid]) rosterPicksRaw[nowRid]=[];
-        rosterPicksRaw[nowRid].push({season:yr,round:rd});
-      });
-    });
-
-    // Commissioner overrides — inject synthetic transactions BEFORE replay runs
-    if(id==='1312091473377792000'){
-      const nameToRid={};
-      rosters.forEach(r=>{ const u=umap[r.owner_id]; if(u) nameToRid[u.name]=r.roster_id; });
-      const ianRid=nameToRid['Steelerr43'];
-      const timRid=nameToRid['BigSteppaTim'];
-      if(ianRid&&timRid){
-        // #47 (Feb 13): Ian's 2027 1st → Tim. Commissioner reverted it back to Ian immediately.
-        const idx47=dedupedTxns.findIndex(t=>String(t.transaction_id)==='1339686639961657344');
-        const insertAfter=idx47>=0?idx47:dedupedTxns.findIndex(t=>(t.status_updated||0)>=1739476585141);
-        dedupedTxns.splice(insertAfter+1,0,{
-          transaction_id:'1339686639961657345',
-          status_updated:1739476585142,
-          _lid:id,
-          draft_picks:[{season:'2027',round:1,previous_owner_id:timRid,owner_id:ianRid}]
-        });
-      }
-    }
-
-    // Step 5: Invariant replay — always runs, is the source of truth for pick counts
-    // Per-transaction dedup only — same pick listed twice in one transaction = skip second
-    const N=rosters.length;
-    PICK_YEARS.forEach(yr=>PICK_ROUNDS.forEach(rd=>{
-      const correct={};
-      rosters.forEach(r=>{ correct[r.roster_id]=1; });
-      dedupedTxns.forEach(txn=>{
-        const seenInTxn=new Set();
-        (txn.draft_picks||[]).forEach(pk=>{
-          if(parseInt(pk.season)!==yr||parseInt(pk.round)!==rd) return;
-          const lid=txn._lid;
-          const prev=toRid(pk.previous_owner_id,lid);
-          const now=toRid(pk.owner_id,lid);
-          if(!prev||!now||prev===now) return;
-          const key=`${prev}_${now}_${rd}`;
-          if(seenInTxn.has(key)) return; seenInTxn.add(key);
-          if((correct[prev]||0)>0){ correct[prev]--; correct[now]=(correct[now]||0)+1; }
-        });
-      });
-
-      // Reconcile rosterPicksRaw to match
-      if(yr===2027&&rd===2){
-        window._replay2027rd2=Object.assign({},correct);
-      }
-      rosters.forEach(r=>{
-        const rid=r.roster_id;
-        const have=(rosterPicksRaw[rid]||[]).filter(p=>p.season===yr&&p.round===rd).length;
-        const want=correct[rid]||0;
-        if(have===want) return;
-        if(have>want){
-          let remove=have-want;
-          rosterPicksRaw[rid]=rosterPicksRaw[rid].filter(p=>{
-            if(p.season===yr&&p.round===rd&&remove>0){remove--;return false;}
-            return true;
-          });
-        } else {
-          for(let i=0;i<want-have;i++) rosterPicksRaw[rid].push({season:yr,round:rd});
+      const tradedPicks=await fetch(`https://api.sleeper.app/v1/league/${id}/traded_picks`).then(r=>r.ok?r.json():[]).catch(()=>[]);
+      tradedPicks.forEach(tp=>{
+        const yr=parseInt(tp.season)||0;
+        const rd=parseInt(tp.round)||0;
+        const origRid=parseInt(tp.roster_id)||0;
+        const nowRid=parseInt(tp.owner_id)||0;
+        if(!PICK_YEARS.includes(yr)||!PICK_ROUNDS.includes(rd)) return;
+        if(!origRid||!nowRid||origRid===nowRid) return;
+        const origArr=rosterPicksRaw[origRid];
+        if(origArr){
+          const idx=origArr.findIndex(p=>p.season===yr&&p.round===rd&&p._orig===origRid);
+          if(idx>=0) origArr.splice(idx,1);
         }
+        if(!rosterPicksRaw[nowRid]) rosterPicksRaw[nowRid]=[];
+        rosterPicksRaw[nowRid].push({season:yr,round:rd,_orig:origRid});
       });
-    }));
-
+    }catch(e){}
     // ─── END PICK ALLOCATION ──────────────────────────────────────────────────
 
     window._sleeperPlayers=sp;
