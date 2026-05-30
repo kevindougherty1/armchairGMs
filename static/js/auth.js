@@ -136,7 +136,7 @@ async function doForgotPassword(){
       return aerr(msg);
     }
     aok('If that email has an account, a reset link is on its way. Check your inbox.');
-  }catch(e){aerr('Error: '+e.message);}
+  }catch(e){aerr('Something went wrong. Please try again.');}
   finally{setAuthLoading(false);}
 }
 
