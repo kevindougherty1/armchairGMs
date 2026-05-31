@@ -5,26 +5,11 @@ function getFilt(){
   const q=document.getElementById('search').value.toLowerCase().trim();
   return DATA.filter(d=>(MODE==='ALL'||d.pos===MODE)&&(!q||d.name.toLowerCase().includes(q)||(d.team&&d.team.toLowerCase().includes(q))));
 }
+// Use the unified 10-tier system from core.js (tierLetter). The rankings
+// page just needs a label + CSS class wrapper around that single source.
 function getTier(sc){
-  if(sc>=92)   return {key:'S',label:'S Tier',cls:'tier-S'};
-  if(sc>=84)   return {key:'A',label:'A Tier',cls:'tier-A'};
-  if(sc>=78)   return {key:'B',label:'B Tier',cls:'tier-B'};
-  if(sc>=66)   return {key:'C',label:'C Tier',cls:'tier-C'};
-  if(sc>=60)   return {key:'D',label:'D Tier',cls:'tier-D'};
-  if(sc>=38)   return {key:'E',label:'E Tier',cls:'tier-E'};
-  if(sc>=36)   return {key:'F',label:'F Tier',cls:'tier-F'};
-  if(sc>=28)   return {key:'G',label:'G Tier',cls:'tier-G'};
-  if(sc>=25)   return {key:'H',label:'H Tier',cls:'tier-H'};
-  if(sc>=23)   return {key:'I',label:'I Tier',cls:'tier-I'};
-  if(sc>=22)   return {key:'J',label:'J Tier',cls:'tier-J'};
-  if(sc>=19)   return {key:'K',label:'K Tier',cls:'tier-K'};
-  if(sc>=17)   return {key:'L',label:'L Tier',cls:'tier-L'};
-  if(sc>=14)   return {key:'M',label:'M Tier',cls:'tier-M'};
-  if(sc>=12)   return {key:'N',label:'N Tier',cls:'tier-N'};
-  if(sc>=9.5)  return {key:'O',label:'O Tier',cls:'tier-O'};
-  if(sc>=7)    return {key:'P',label:'P Tier',cls:'tier-P'};
-  if(sc>=2)    return {key:'Q',label:'Q Tier',cls:'tier-Q'};
-  return               {key:'R',label:'R Tier',cls:'tier-R'};
+  const key=tierLetter(sc);
+  return {key, label:`${key} Tier`, cls:`tier-${key}`};
 }
 
 function renderTable(){

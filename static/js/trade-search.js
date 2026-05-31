@@ -60,6 +60,35 @@ async function loadLeague(){
     let sp={};
     try{const pr=await fetch('https://api.sleeper.app/v1/players/nfl');sp=await pr.json();}catch(e){}
 
+    // Fetch 2026 Weeks 1-3 projections from Sleeper for the draft-pick slot
+    // calculation, then average each player's PPG across the weeks they
+    // appear in. Averaging dampens single-week matchup noise — a stud with
+    // a tough Week 1 defense won't get unfairly downgraded.
+    // We use this to RANK teams, not for absolute scoring, so a 3-week
+    // sample is plenty.
+    let projMap={};
+    try{
+      const recPts=Number(league.scoring_settings?.rec||0);
+      const projField=recPts>=0.9?'pts_ppr':recPts>=0.4?'pts_half_ppr':'pts_std';
+      const weekResults=await Promise.all([1,2,3].map(w=>
+        fetch(`https://api.sleeper.com/projections/nfl/2026/${w}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE`)
+          .then(r=>r.ok?r.json():[]).catch(()=>[])
+      ));
+      const acc={}; // pid -> {sum, count}
+      weekResults.forEach(week=>{
+        week.forEach(e=>{
+          const pid=e.player_id;
+          const v=e.stats?.[projField];
+          if(!pid||v==null||v==='') return;
+          if(!acc[pid]) acc[pid]={sum:0,count:0};
+          acc[pid].sum+=Number(v);
+          acc[pid].count+=1;
+        });
+      });
+      Object.entries(acc).forEach(([pid,o])=>{ projMap[String(pid)]=o.sum/o.count; });
+    }catch(e){}
+    window._projMap=projMap; // exposed for trade rec engine in myteam.js
+
     loadStep(4);
 
     // ─── PICK ALLOCATION ──────────────────────────────────────────────────────
@@ -182,12 +211,55 @@ async function loadLeague(){
       r.pw=Math.round(wr*TW);r.pl=TW-r.pw;r.pwr=Math.round(wr*100);
     });
 
-    // Assign draft pick SLOTS based on projected finish order
-    // Rule: slot determined solely by original owner's projected record
-    // Bottom third = Early, Middle third = Mid, Top third = Late
-    // SAME slot for ALL years (2027/2028/2029) — consistent per original owner
-    // Rounds 3-4 always Mid regardless
-    const draftOrder=[...scored].sort((a,b)=>a.pwr-b.pwr);
+    // Assign draft pick SLOTS based on each team's REDRAFT/PRODUCTION outlook
+    // (not dynasty value). Older productive vets like CMC/Saquon project to
+    // score more this season than young dynasty studs like Hampton, so a team
+    // built around proven floor will finish higher and produce LATE picks.
+    // Algorithm:
+    //   1. For each team, optimize a starting lineup from league.roster_positions
+    //      (handles FLEX / SUPER_FLEX / etc per the league's actual format)
+    //   2. Sum each starter's Week 1 2026 projection
+    //   3. Sort teams ascending by that total — weakest projection drafts first
+    //   4. Bucket into thirds: bottom = Early, middle = Mid, top = Late
+    // Only 2027 picks get the slot label — we can't reasonably project who'll
+    // finish where in 2027/2028, so 2028 and 2029 picks display unlabeled and
+    // use the Mid valuation for scoring.
+    const startSlots=(league.roster_positions||[]).filter(s=>!['BN','TAXI','IR'].includes(s));
+    window._startSlots=startSlots; // exposed for trade rec engine in myteam.js
+    const FLEX_ELIG={
+      FLEX:['RB','WR','TE'],
+      SUPER_FLEX:['QB','RB','WR','TE'],
+      REC_FLEX:['WR','TE'],
+      WRRB_FLEX:['RB','WR'],
+      WRRB:['RB','WR']
+    };
+    function projStarterPPG(team){
+      const byPos={QB:[],RB:[],WR:[],TE:[]};
+      team.all.forEach(p=>{
+        if(byPos[p.pos]) byPos[p.pos].push({p,proj:projMap[String(p.sleeper_id)]||0});
+      });
+      Object.values(byPos).forEach(arr=>arr.sort((a,b)=>b.proj-a.proj));
+      const used=new Set();
+      let total=0;
+      startSlots.forEach(slot=>{
+        if(['QB','RB','WR','TE'].includes(slot)){
+          const pick=byPos[slot]?.find(e=>!used.has(e.p));
+          if(pick){used.add(pick.p);total+=pick.proj;}
+        }
+      });
+      startSlots.forEach(slot=>{
+        const elig=FLEX_ELIG[slot];if(!elig)return;
+        let best=null;
+        elig.forEach(pos=>{
+          const cand=byPos[pos]?.find(e=>!used.has(e.p));
+          if(cand&&(!best||cand.proj>best.proj))best=cand;
+        });
+        if(best){used.add(best.p);total+=best.proj;}
+      });
+      return total;
+    }
+    scored.forEach(r=>{ r.projStarterPPG=Math.round(projStarterPPG(r)*10)/10; });
+    const draftOrder=[...scored].sort((a,b)=>a.projStarterPPG-b.projStarterPPG);
     const _n=draftOrder.length;
     const rosterSlot={};
     draftOrder.forEach((r,i)=>{
@@ -203,7 +275,10 @@ async function loadLeague(){
       (r.picks||[]).forEach(pk=>{
         const yr=parseInt(pk.season)||2027;
         const rd=pk.round;
-        const slot='Mid'; // original_roster_id unavailable so always use Mid
+        // 2027 picks get a real slot based on the ORIGINAL owner's projected
+        // 2026 finish. 2028/2029 use Mid because projecting that far ahead is
+        // speculative; the display layer omits the slot label for those years.
+        const slot=yr===2027?(rosterSlot[pk._orig]||'Mid'):'Mid';
         pk.slot=slot;
         let match=DATA.find(d=>d.type==='pick'&&d.year==yr&&d.round==rd&&d.slot===slot);
         if(!match) match=DATA.find(d=>d.type==='pick'&&d.year==yr&&d.round==rd);

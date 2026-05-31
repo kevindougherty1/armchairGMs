@@ -89,20 +89,31 @@ function getScore(d){
     : base;
 }
 
-// Tier letter for a player/pick — used everywhere we'd normally show a raw
-// numeric value. Coarse-grained signal that doesn't crowd the UI or break
-// immersion the way decimals do. Score thresholds chosen to match the
-// existing curve so tier S = top ~12 players, A = top 13-30, etc.
+// Tier letter for a player/pick — unified 10-tier system (S through I) used
+// EVERYWHERE: rankings page, roster modals, player cards, trade rec engine.
+// Tight at the top so true elite players stand out, wider in the middle so
+// pivotable trade targets cluster together. ~85% of ranked players land in
+// tiers D–I.
 function tierLetter(score){
-  if(score>=85) return 'S';
-  if(score>=65) return 'A';
-  if(score>=40) return 'B';
-  if(score>=20) return 'C';
-  if(score>=8)  return 'D';
-  return 'F';
+  if(score>=90) return 'S'; // ~top 5
+  if(score>=72) return 'A'; // ~top 13
+  if(score>=55) return 'B'; // ~top 22
+  if(score>=38) return 'C'; // ~top 30 — real RB1 / WR1 territory
+  if(score>=25) return 'D'; // ~top 50
+  if(score>=17) return 'E'; // ~top 75 — main trade-pivot cluster
+  if(score>=10) return 'F'; // ~top 100
+  if(score>=5)  return 'G'; // ~top 130
+  if(score>=2)  return 'H'; // ~top 175
+  return 'I';               // rest
 }
 function tierColor(letter){
-  return {S:'var(--accent)',A:'var(--gt)',B:'var(--gold)',C:'var(--text2)',D:'var(--text3)',F:'var(--text3)'}[letter]||'var(--text3)';
+  // S–H use distinct CSS tier-* classes; map to a coordinated palette so
+  // text rendering matches the background pills shown on the rankings page.
+  return {
+    S:'#c8a030', A:'var(--accent)', B:'#5a9a5a', C:'#5a80c0',
+    D:'#8060b0', E:'#a06060', F:'#8a6040', G:'#607060',
+    H:'#706050', I:'var(--text3)'
+  }[letter]||'var(--text3)';
 }
 
 function setScoring(mode){

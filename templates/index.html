@@ -594,6 +594,11 @@
       <div id="mt-sub-recs" class="mt-sub-view" style="display:none;">
         <div>
           <div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);">🎯 Recommended Moves</div>
+          <div style="display:flex;gap:0;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;overflow:hidden;margin-bottom:14px;max-width:340px;">
+            <button class="recs-mode-btn active" data-mode="contender" onclick="setRecsMode('contender',this)" style="flex:1;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;padding:7px 10px;border:none;background:var(--accent);color:var(--bg2);cursor:pointer;font-weight:600;">Contender</button>
+            <button class="recs-mode-btn" data-mode="winnow" onclick="setRecsMode('winnow',this)" style="flex:1;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;padding:7px 10px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-weight:600;">Win Now</button>
+            <button class="recs-mode-btn" data-mode="rebuild" onclick="setRecsMode('rebuild',this)" style="flex:1;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;padding:7px 10px;border:none;background:transparent;color:var(--text3);cursor:pointer;font-weight:600;">Rebuild</button>
+          </div>
           <div id="mt-trade-recs" style="display:flex;flex-direction:column;gap:10px;"></div>
         </div>
       </div>

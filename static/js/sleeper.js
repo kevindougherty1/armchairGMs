@@ -28,9 +28,13 @@
       const yr=pk.season;
       const rdLabel=rd===1?'1st':rd===2?'2nd':rd===3?'3rd':'4th';
       const origRid=pk._orig;
+      const origOwner=(origRid!==undefined&&origRid!==r.rid)?ridToOwner2[origRid]:null;
+      const meta=origOwner?`via ${origOwner.split(' ')[0]}`:'Dynasty Pick';
+      // Only 2027 picks have a meaningful slot projection — see trade-search.js
+      const label=yr===2027?`${yr} ${rdLabel} · ${slot}`:`${yr} ${rdLabel}`;
       html+=`<div class="modal-player-row">
         <div style="width:36px;height:36px;border-radius:50%;background:rgba(155,138,191,0.12);border:1px solid ${pickColor(rd)};display:flex;align-items:center;justify-content:center;font-family:Oswald,sans-serif;font-size:9px;font-weight:600;color:${pickColor(rd)};flex-shrink:0;">R${rd}</div>
-        <div style="flex:1;"><div class="modal-player-name" style="color:${pickColor(rd)};">${yr} ${rdLabel} · ${slot}</div><div class="modal-player-meta">Dynasty Pick</div></div>
+        <div style="flex:1;"><div class="modal-player-name" style="color:${pickColor(rd)};">${label}</div><div class="modal-player-meta">${meta}</div></div>
         <div class="modal-player-score" style="color:${tierColor(tier)};font-family:'Russo One',sans-serif;">${tier}</div>
       </div>`;
     });
